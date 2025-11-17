@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>語音辨識 + 語言模型控制</title>
+  <style>
+    body { margin: 0; overflow: hidden; background-color: black; }
+    canvas { display: block; }
+
+    #inputContainer {
+      pointer-events: auto;
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px;
+      border-radius: 5px;
+      z-index: 9999;
+      color: white;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      width: 700px;
+    }
+
+    #inputBox {
+      font-size: 20px;
+      width: 100%;
+      color: white;
+      background: transparent;
+      border: 1px solid white;
+      padding: 5px;
+      font-family: monospace;
+      box-sizing: border-box;
+    }
+
+    #buttonRow {
+      margin-top: 6px;
+      display: flex;
+      gap: 6px;
+    }
+
+    #sendBtn, #voiceBtn {
+      flex: 1;
+      font-size: 14px;
+      padding: 4px 6px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      background: #222;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    #sendBtn:active, #voiceBtn:active {
+      transform: translateY(1px);
+    }
+
+    #status {
+      margin-top: 4px;
+      font-size: 12px;
+      opacity: 0.8;
+      min-height: 1.2em;
+    }
+
+    #answerBox {
+      margin-top: 6px;
+      font-size: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 180px;
+      overflow-y: auto;
+      border-top: 1px solid rgba(255,255,255,0.2);
+      padding-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="inputContainer">
+    <input type="text" id="inputBox" placeholder="語音或文字輸入內容...">
+    <div id="buttonRow">
+      <button id="voiceBtn">🎤 語音（Enter）</button>
+      <button id="sendBtn">📤 送出給模型</button>
+    </div>
+    <div id="status">狀態：待命</div>
+    <div id="answerBox"></div>
+  </div>
+
+  <audio id="startBeep" src="ding.mp3" preload="auto"></audio>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
+  <script>
+    // =========================
+    // 1. Three.js 立方體場景
+    // =========================
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const geometry = new THREE.BoxGeometry();
+    const material = new THREE.MeshNormalMaterial();
+    const cube = new THREE.Mesh(geometry, material);
+    scene.add(cube);
+    camera.position.z = 5;
+
+    // 鍵盤控制 + Enter 啟動語音
+    window.addEventListener('keydown', (event) => {
+      switch (event.key) {
+        case 'ArrowLeft': rotateLeft(); break;
+        case 'ArrowRight': rotateRight(); break;
+        case 'ArrowUp': rotateUp(); break;
+        case 'ArrowDown': rotateDown(); break;
+        case 'Enter': playBeepAndStartRecognition(); break;
+      }
+    });
+
+    function rotateLeft() {
+      cube.rotation.y -= 0.1;
+      markUserActive();
+    }
+    function rotateRight() {
+      cube.rotation.y += 0.1;
+      markUserActive();
+    }
+    function rotateUp() {
+      camera.position.z -= 0.5;
+      camera.position.z = Math.max(1, camera.position.z);
+      markUserActive();
+    }
+    function rotateDown() {
+      camera.position.z += 0.5;
+      camera.position.z = Math.min(20, camera.position.z);
+      markUserActive();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // =========================
+    // 2. 語言模型 API 相關
+    // =========================
+
+    // ⚠️ 請改成你的後端 API 位址：
+    // - 同一台電腦測試：  "http://127.0.0.1:8000/chat"
+    // - 區網其他裝置連線： "http://140.130.33.131:8000/chat"  (依你的 IP 調整)
+    const API_URL = "http://127.0.0.1:8000/chat";
+
+    const inputBox  = document.getElementById("inputBox");
+    const sendBtn   = document.getElementById("sendBtn");
+    const voiceBtn  = document.getElementById("voiceBtn");
+    const statusEl  = document.getElementById("status");
+    const answerBox = document.getElementById("answerBox");
+
+    // idleTimer：語音輸入後停 2 秒自動送出
+    let idleTimer = null;
+    let inputValue = "";
+
+    function resetIdleTimer() {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        if (inputValue.trim()) {
+          console.log("⏎ 自動發送：", inputValue);
+          sendToLLM(inputValue);        // 自動送到語言模型
+          inputValue = "";
+          inputBox.value = "";
+        }
+      }, 2000);
+    }
+
+    window.markUserActive = function () {
+      resetIdleTimer();
+    };
+
+    // 專門接語音辨識結果的入口
+    window.showRecognizedText = function (text) {
+      inputBox.value = text;
+      inputValue = text;
+      resetIdleTimer();
+
+      // 語音 → 控制立方體
+      if (text.includes("左")) rotateLeft();
+      else if (text.includes("右")) rotateRight();
+      else if (text.includes("前") || text.includes("縮小")) rotateUp();
+      else if (text.includes("後") || text.includes("放大")) rotateDown();
+    };
+
+    async function sendToLLM(textOverride) {
+      const content = (textOverride !== undefined ? textOverride : inputBox.value).trim();
+      if (!content) return;
+
+      // 更新狀態：生成中
+      statusEl.textContent = "狀態：生成中...";
+      answerBox.textContent = "";
+
+      // 使用 performance.now() 在前端量測時間
+      const t0 = performance.now();
+
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: content })
+        });
+
+        if (!res.ok) {
+          throw new Error("HTTP 狀態碼 " + res.status);
+        }
+
+        const data = await res.json();
+        const reply   = data.reply  || data.answer || JSON.stringify(data);
+        let elapsed   = typeof data.elapsed === "number"
+                        ? data.elapsed
+                        : (performance.now() - t0) / 1000;
+
+        // 顯示回答
+        answerBox.textContent = reply;
+        statusEl.textContent  = "狀態：完成，用時 " + elapsed.toFixed(2) + " 秒";
+
+      } catch (err) {
+        statusEl.textContent = "⚠️ 無法連線到語言模型伺服器：" + err.message;
+      }
+    }
+
+    // 送出按鈕 / 輸入框 Enter → 手動送出
+    sendBtn.addEventListener("click", () => {
+      sendToLLM();
+    });
+
+    inputBox.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();  // 避免觸發語音那個 Enter
+        sendToLLM();
+      }
+    });
+
+    // =========================
+    // 3. 瀏覽器語音辨識（Web Speech API）
+    // =========================
+    let recognition = null;
+
+    function initSpeechRecognition() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {
+        console.warn("此瀏覽器不支援 Web Speech API 語音辨識");
+        statusEl.textContent = "狀態：此瀏覽器不支援語音辨識";
+        return;
+      }
+
+      recognition = new SR();
+      recognition.lang = "zh-TW";
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onresult = function (event) {
+        const text = event.results[0][0].transcript;
+        console.log("辨識結果：", text);
+        showRecognizedText(text);   // 語音結果 → 控制 + 填入文字
+      };
+
+      recognition.onerror = function (event) {
+        console.error("語音辨識錯誤：", event.error);
+        statusEl.textContent = "語音辨識錯誤：" + event.error;
+      };
+
+      recognition.onend = function () {
+        console.log("語音辨識結束");
+      };
+
+      console.log("語音辨識初始化完成");
+    }
+
+    function playBeepAndStartRecognition() {
+      const beep = document.getElementById("startBeep");
+      beep.currentTime = 0;
+      beep.play().catch(() => {}); // 有些瀏覽器可能會擋，忽略錯誤即可
+
+      if (recognition) {
+        recognition.stop();
+        recognition.start();
+        statusEl.textContent = "狀態：正在聽，請說話...";
+      } else {
+        statusEl.textContent = "狀態：此瀏覽器不支援語音辨識";
+      }
+    }
+
+    // 語音按鈕也可以啟動辨識
+    voiceBtn.addEventListener("click", () => {
+      playBeepAndStartRecognition();
+    });
+
+    window.onload = function () {
+      initSpeechRecognition();
+      statusEl.textContent = "狀態：待命（Enter 或按 🎤 開始語音）";
+    };
+  </script>
+</body>
+</html>
