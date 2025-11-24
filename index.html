@@ -2,85 +2,268 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <title>語音辨識 + 語言模型控制</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sci-Fi AI Interface</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
   <style>
-    body { margin: 0; overflow: hidden; background-color: black; }
-    canvas { display: block; }
+    :root {
+      --bg-color: #050508;
+      --panel-bg: rgba(20, 24, 35, 0.75);
+      --panel-border: rgba(80, 100, 255, 0.25);
+      --text-primary: #e0e0ff;
+      --text-secondary: #8a8ab5;
+      --accent-blue: #4d6dff;
+      --accent-purple: #8c52ff;
+      --success-green: #00ff95;
+    }
 
-    #inputContainer {
-      pointer-events: auto;
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: var(--bg-color);
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-primary);
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+
+    /* ================= UI Container ================= */
+    #ui-container {
       position: fixed;
-      top: 10px;
-      left: 10px;
-      background: rgba(0, 0, 0, 0.6);
-      padding: 10px;
-      border-radius: 5px;
-      z-index: 9999;
-      color: white;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      width: 700px;
-    }
-
-    #inputBox {
-      font-size: 20px;
-      width: 100%;
-      color: white;
-      background: transparent;
-      border: 1px solid white;
-      padding: 5px;
-      font-family: monospace;
-      box-sizing: border-box;
-    }
-
-    #buttonRow {
-      margin-top: 6px;
+      top: 30px;
+      left: 30px;
+      z-index: 10;
       display: flex;
-      gap: 6px;
+      flex-direction: column;
+      gap: 15px; /* 面板之間的間距 */
+      pointer-events: none;
     }
 
-    #sendBtn, #voiceBtn {
-      flex: 1;
-      font-size: 14px;
-      padding: 4px 6px;
-      border-radius: 4px;
-      border: 1px solid #ccc;
-      background: #222;
-      color: #fff;
-      cursor: pointer;
+    #ui-container > * {
+      pointer-events: auto;
     }
 
-    #sendBtn:active, #voiceBtn:active {
-      transform: translateY(1px);
+    /* ================= Common Panel Style ================= */
+    .glass-panel {
+      background: var(--panel-bg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 20px;
+      width: 380px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      transition: all 0.3s ease;
     }
 
-    #status {
-      margin-top: 4px;
+    /* Header Status */
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
       font-size: 12px;
-      opacity: 0.8;
-      min-height: 1.2em;
+      color: var(--text-secondary);
+      letter-spacing: 1px;
+      font-weight: 700;
     }
 
-    #answerBox {
-      margin-top: 6px;
-      font-size: 14px;
-      white-space: pre-wrap;
-      word-break: break-word;
-      max-height: 180px;
-      overflow-y: auto;
-      border-top: 1px solid rgba(255,255,255,0.2);
-      padding-top: 4px;
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--success-green);
     }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--success-green);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--success-green);
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.listening { background-color: #ff4444; box-shadow: 0 0 8px #ff4444; animation: pulse-fast 1s infinite; }
+    .status-dot.busy { background-color: #ffaa00; box-shadow: 0 0 8px #ffaa00; }
+
+    /* Input Box */
+    #inputBox {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 12px 15px;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      box-sizing: border-box;
+      transition: all 0.3s ease;
+      margin-bottom: 15px;
+    }
+
+    #inputBox:focus {
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 15px rgba(77, 109, 255, 0.2);
+    }
+
+    /* Main Buttons Row */
+    #buttonRow { display: flex; gap: 10px; }
+
+    .main-btn {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.3s ease;
+      color: var(--text-primary);
+    }
+
+    #voiceBtn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--panel-border);
+    }
+    #voiceBtn:hover { background: rgba(255, 255, 255, 0.1); }
+    #voiceBtn:active { transform: translateY(2px); }
+
+    #sendBtn {
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      box-shadow: 0 4px 15px rgba(77, 109, 255, 0.3);
+    }
+    #sendBtn:hover { opacity: 0.9; box-shadow: 0 6px 20px rgba(77, 109, 255, 0.4); }
+    #sendBtn:active { transform: translateY(2px); }
+
+    /* ================= RESPONSE LOG PANEL (NEW) ================= */
+    #responsePanel {
+      display: none; /* 預設隱藏，有訊息時顯示 */
+      margin-bottom: 5px;
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+
+    #responsePanel.show {
+        display: block;
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .log-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 10px;
+        margin-bottom: 10px;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .log-title { color: var(--accent-blue); display: flex; align-items: center; gap: 8px; }
+    .log-time { color: var(--text-secondary); font-size: 11px; }
+
+    .log-content {
+        font-size: 13px;
+        line-height: 1.6;
+        color: #ddd;
+        white-space: pre-wrap; /* 保留換行格式 */
+        max-height: 200px;     /* 太長時出現卷軸 */
+        overflow-y: auto;
+    }
+    
+    /* 自定義卷軸樣式 */
+    .log-content::-webkit-scrollbar { width: 5px; }
+    .log-content::-webkit-scrollbar-track { background: transparent; }
+    .log-content::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+    /* ================= Secondary Controls ================= */
+    .controls-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .control-pill {
+      background: var(--panel-bg);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--panel-border);
+      color: var(--text-secondary);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
+
+    .control-pill:hover {
+      color: var(--text-primary);
+      border-color: var(--accent-blue);
+      background: rgba(77, 109, 255, 0.1);
+    }
+    .control-pill:active { transform: scale(0.95); }
+    .control-pill.disabled { opacity: 0.5; cursor: not-allowed; }
+
+    @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+    @keyframes pulse-fast { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
   </style>
 </head>
 <body>
-  <div id="inputContainer">
-    <input type="text" id="inputBox" placeholder="語音或文字輸入內容...">
-    <div id="buttonRow">
-      <button id="voiceBtn">🎤 語音（Enter）</button>
-      <button id="sendBtn">📤 送出給模型</button>
+
+  <div id="ui-container">
+    <div class="glass-panel main-panel">
+      <div class="panel-header">
+        <div class="status-indicator">
+          <div class="status-dot" id="uiStatusDot"></div>
+          <span id="uiStatusText">SYSTEM READY</span>
+        </div>
+        <div><i class="fa-solid fa-signal"></i> 待命</div>
+      </div>
+
+      <input type="text" id="inputBox" placeholder="輸入指令或按 Enter 說話..." autocomplete="off">
+
+      <div id="buttonRow">
+        <button id="voiceBtn" class="main-btn"><i class="fa-solid fa-microphone"></i> 語音 (Enter)</button>
+        <button id="sendBtn" class="main-btn"><i class="fa-solid fa-paper-plane"></i> 送出</button>
+      </div>
     </div>
-    <div id="status">狀態：待命</div>
-    <div id="answerBox"></div>
+
+    <div id="responsePanel" class="glass-panel">
+        <div class="log-header">
+            <span class="log-title"><i class="fa-solid fa-terminal"></i> RESPONSE_LOG</span>
+            <span class="log-time" id="apiTimer"><i class="fa-regular fa-clock"></i> 0.00s</span>
+        </div>
+        <div class="log-content" id="logContent">
+            </div>
+    </div>
+
+    <div class="controls-row">
+        <button class="control-pill disabled"><i class="fa-solid fa-up-down-left-right"></i> Drag/Scroll</button>
+        <button class="control-pill" onclick="rotateUp()"><i class="fa-solid fa-arrow-up"></i> Zoom In</button>
+        <button class="control-pill" onclick="rotateDown()"><i class="fa-solid fa-arrow-down"></i> Zoom Out</button>
+        <button class="control-pill" onclick="rotateLeft()"><i class="fa-solid fa-arrow-left"></i> Rotate L</button>
+        <button class="control-pill" onclick="rotateRight()"><i class="fa-solid fa-arrow-right"></i> Rotate R</button>
+    </div>
   </div>
 
   <audio id="startBeep" src="ding.mp3" preload="auto"></audio>
@@ -88,22 +271,84 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
   <script>
     // =========================
-    // 1. Three.js 立方體場景
+    // 1. Three.js 場景 (維持不變)
     // =========================
     const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x050508, 0.02);
+
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
 
-    const geometry = new THREE.BoxGeometry();
-    const material = new THREE.MeshNormalMaterial();
+    const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+    const material = new THREE.MeshStandardMaterial({
+        roughness: 0.4,
+        metalness: 0.7,
+        emissiveIntensity: 0.8,
+    });
     const cube = new THREE.Mesh(geometry, material);
+    cube.castShadow = true;
+    cube.position.y = 1;
     scene.add(cube);
-    camera.position.z = 5;
+    camera.position.z = 6;
+    camera.position.y = 2;
+    camera.lookAt(cube.position);
 
-    // 鍵盤控制 + Enter 啟動語音
+    const gridHelper = new THREE.GridHelper(60, 60, 0x4444ff, 0x222266);
+    gridHelper.position.y = -0.5;
+    gridHelper.material.opacity = 0.4;
+    gridHelper.material.transparent = true;
+    scene.add(gridHelper);
+
+    const planeGeo = new THREE.PlaneGeometry(60, 60);
+    const planeMat = new THREE.ShadowMaterial({ opacity: 0.3 });
+    const plane = new THREE.Mesh(planeGeo, planeMat);
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.y = -0.51;
+    plane.receiveShadow = true;
+    scene.add(plane);
+
+    const starsGeometry = new THREE.BufferGeometry();
+    const starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.05, transparent: true, opacity: 0.8 });
+    const starVertices = [];
+    for (let i = 0; i < 2000; i++) {
+        const x = (Math.random() - 0.5) * 100;
+        const y = (Math.random() - 0.5) * 100;
+        const z = (Math.random() - 0.5) * 100;
+        if(Math.abs(x) < 5 && Math.abs(y) < 5 && Math.abs(z) < 5) continue;
+        starVertices.push(x, y, z);
+    }
+    starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+    const stars = new THREE.Points(starsGeometry, starsMaterial);
+    scene.add(stars);
+
+    const ambientLight = new THREE.AmbientLight(0x111122);
+    scene.add(ambientLight);
+    const mainLight = new THREE.PointLight(0x6688ff, 2, 50);
+    mainLight.position.set(5, 5, 5);
+    mainLight.castShadow = true;
+    scene.add(mainLight);
+    const rimLight = new THREE.PointLight(0xff00ff, 1, 30);
+    rimLight.position.set(-5, 3, -5);
+    scene.add(rimLight);
+
+    // 控制與顏色變換
+    const ROTATION_STEP = Math.PI / 6;
+
+    function updateCubeColor() {
+        let hue = (cube.rotation.y % (Math.PI * 2)) / (Math.PI * 2);
+        if (hue < 0) hue += 1;
+        cube.material.color.setHSL(hue, 0.8, 0.5);
+        cube.material.emissive.setHSL(hue, 1.0, 0.6);
+    }
+
     window.addEventListener('keydown', (event) => {
+      if (document.activeElement === inputBox && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+        return;
+      }
       switch (event.key) {
         case 'ArrowLeft': rotateLeft(); break;
         case 'ArrowRight': rotateRight(); break;
@@ -113,20 +358,22 @@
       }
     });
 
-    function rotateLeft() {
-      cube.rotation.y -= 0.1;
+    window.rotateLeft = function() {
+      cube.rotation.y -= ROTATION_STEP;
+      updateCubeColor();
       markUserActive();
     }
-    function rotateRight() {
-      cube.rotation.y += 0.1;
+    window.rotateRight = function() {
+      cube.rotation.y += ROTATION_STEP;
+      updateCubeColor();
       markUserActive();
     }
-    function rotateUp() {
+    window.rotateUp = function() {
       camera.position.z -= 0.5;
-      camera.position.z = Math.max(1, camera.position.z);
+      camera.position.z = Math.max(2, camera.position.z);
       markUserActive();
     }
-    function rotateDown() {
+    window.rotateDown = function() {
       camera.position.z += 0.5;
       camera.position.z = Math.min(20, camera.position.z);
       markUserActive();
@@ -134,6 +381,7 @@
 
     function animate() {
       requestAnimationFrame(animate);
+      stars.rotation.y += 0.0005;
       renderer.render(scene, camera);
     }
     animate();
@@ -145,30 +393,37 @@
     });
 
     // =========================
-    // 2. 語言模型 API 相關
+    // 2. 語言模型 API 相關 (更新輸出顯示)
     // =========================
-
-    // ⚠️ 請改成你的後端 API 位址：
-    // - 同一台電腦測試：  "http://127.0.0.1:8000/chat"
-    // - 區網其他裝置連線： "http://140.130.33.131:8000/chat"  (依你的 IP 調整)
     const API_URL = "https://1dpp4dm8-8000.asse.devtunnels.ms/chat";
 
     const inputBox  = document.getElementById("inputBox");
     const sendBtn   = document.getElementById("sendBtn");
     const voiceBtn  = document.getElementById("voiceBtn");
-    const statusEl  = document.getElementById("status");
-    const answerBox = document.getElementById("answerBox");
+    const uiStatusText = document.getElementById("uiStatusText");
+    const uiStatusDot = document.getElementById("uiStatusDot");
+    
+    // 新增：輸出區塊元素
+    const responsePanel = document.getElementById("responsePanel");
+    const logContent = document.getElementById("logContent");
+    const apiTimer = document.getElementById("apiTimer");
 
-    // idleTimer：語音輸入後停 2 秒自動送出
     let idleTimer = null;
     let inputValue = "";
+
+    function updateUIStatus(status, type = 'ready') {
+        uiStatusText.textContent = status;
+        uiStatusDot.className = 'status-dot';
+        if (type === 'listening') uiStatusDot.classList.add('listening');
+        else if (type === 'busy') uiStatusDot.classList.add('busy');
+    }
 
     function resetIdleTimer() {
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
         if (inputValue.trim()) {
           console.log("⏎ 自動發送：", inputValue);
-          sendToLLM(inputValue);        // 自動送到語言模型
+          sendToLLM(inputValue);
           inputValue = "";
           inputBox.value = "";
         }
@@ -179,28 +434,43 @@
       resetIdleTimer();
     };
 
-    // 專門接語音辨識結果的入口
     window.showRecognizedText = function (text) {
       inputBox.value = text;
       inputValue = text;
       resetIdleTimer();
 
-      // 語音 → 控制立方體
       if (text.includes("左")) rotateLeft();
       else if (text.includes("右")) rotateRight();
-      else if (text.includes("前") || text.includes("縮小")) rotateUp();
-      else if (text.includes("後") || text.includes("放大")) rotateDown();
+      else if (text.includes("前") || text.includes("縮小") || text.includes("拉近")) rotateUp();
+      else if (text.includes("後") || text.includes("放大") || text.includes("拉遠")) rotateDown();
     };
+
+    // 打字機特效函數
+    function typeWriter(text, element, speed = 10) {
+        element.textContent = "";
+        let i = 0;
+        function type() {
+            if (i < text.length) {
+                element.textContent += text.charAt(i);
+                i++;
+                element.scrollTop = element.scrollHeight; // 自動捲動
+                setTimeout(type, speed);
+            }
+        }
+        type();
+    }
 
     async function sendToLLM(textOverride) {
       const content = (textOverride !== undefined ? textOverride : inputBox.value).trim();
       if (!content) return;
 
-      // 更新狀態：生成中
-      statusEl.textContent = "狀態：生成中...";
-      answerBox.textContent = "";
+      updateUIStatus("PROCESSING...", "busy");
+      
+      // 顯示輸出面板，並顯示等待動畫
+      responsePanel.classList.add("show");
+      logContent.innerHTML = '<span style="color:#888;">>_ Awaiting server response...</span>';
+      apiTimer.innerHTML = '<i class="fa-regular fa-clock"></i> ...';
 
-      // 使用 performance.now() 在前端量測時間
       const t0 = performance.now();
 
       try {
@@ -209,96 +479,91 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: content })
         });
-
-        if (!res.ok) {
-          throw new Error("HTTP 狀態碼 " + res.status);
-        }
-
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        
         const data = await res.json();
-        const reply   = data.reply  || data.answer || JSON.stringify(data);
-        let elapsed   = typeof data.elapsed === "number"
-                        ? data.elapsed
-                        : (performance.now() - t0) / 1000;
-
-        // 顯示回答
-        answerBox.textContent = reply;
-        statusEl.textContent  = "狀態：完成，用時 " + elapsed.toFixed(2) + " 秒";
+        const reply = data.reply || data.answer || JSON.stringify(data);
+        const elapsed = typeof data.elapsed === "number" ? data.elapsed : (performance.now() - t0) / 1000;
+        
+        console.log("模型回答:", reply);
+        
+        // 更新 UI
+        updateUIStatus(`READY`, "ready");
+        apiTimer.innerHTML = `<i class="fa-regular fa-clock"></i> ${elapsed.toFixed(2)}s`;
+        
+        // 使用打字機特效顯示結果
+        typeWriter(reply, logContent, 20);
 
       } catch (err) {
-        statusEl.textContent = "⚠️ 無法連線到語言模型伺服器：" + err.message;
+        updateUIStatus("ERROR", "busy");
+        logContent.innerHTML = `<span style="color:#ff5555;">[ERROR] Connection Failed: ${err.message}</span>`;
+        apiTimer.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Err';
       }
     }
 
-    // 送出按鈕 / 輸入框 Enter → 手動送出
-    sendBtn.addEventListener("click", () => {
-      sendToLLM();
-    });
-
+    sendBtn.addEventListener("click", () => sendToLLM());
     inputBox.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
-        e.preventDefault();  // 避免觸發語音那個 Enter
+        e.stopPropagation(); 
         sendToLLM();
       }
     });
 
     // =========================
-    // 3. 瀏覽器語音辨識（Web Speech API）
+    // 3. 瀏覽器語音辨識
     // =========================
     let recognition = null;
 
     function initSpeechRecognition() {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR) {
-        console.warn("此瀏覽器不支援 Web Speech API 語音辨識");
-        statusEl.textContent = "狀態：此瀏覽器不支援語音辨識";
+        updateUIStatus("語音 API 不支援", "busy");
         return;
       }
-
       recognition = new SR();
       recognition.lang = "zh-TW";
       recognition.continuous = false;
       recognition.interimResults = false;
-
+      recognition.onstart = function() {
+        updateUIStatus("LISTENING...", "listening");
+        inputBox.placeholder = "正在聆聽...";
+      };
       recognition.onresult = function (event) {
         const text = event.results[0][0].transcript;
-        console.log("辨識結果：", text);
-        showRecognizedText(text);   // 語音結果 → 控制 + 填入文字
+        showRecognizedText(text);
+        updateUIStatus("SYSTEM READY", "ready");
+        inputBox.placeholder = "輸入指令或按 Enter 說話...";
       };
-
       recognition.onerror = function (event) {
-        console.error("語音辨識錯誤：", event.error);
-        statusEl.textContent = "語音辨識錯誤：" + event.error;
+        updateUIStatus("語音錯誤", "ready");
+        inputBox.placeholder = "輸入指令或按 Enter 說話...";
       };
-
       recognition.onend = function () {
-        console.log("語音辨識結束");
+         if(uiStatusText.textContent === "LISTENING...") {
+             updateUIStatus("SYSTEM READY", "ready");
+             inputBox.placeholder = "輸入指令或按 Enter 說話...";
+         }
       };
-
-      console.log("語音辨識初始化完成");
     }
 
     function playBeepAndStartRecognition() {
       const beep = document.getElementById("startBeep");
       beep.currentTime = 0;
-      beep.play().catch(() => {}); // 有些瀏覽器可能會擋，忽略錯誤即可
-
+      beep.play().catch(() => {});
       if (recognition) {
-        recognition.stop();
-        recognition.start();
-        statusEl.textContent = "狀態：正在聽，請說話...";
+        try { recognition.stop(); } catch(e) {}
+        setTimeout(() => recognition.start(), 100);
       } else {
-        statusEl.textContent = "狀態：此瀏覽器不支援語音辨識";
+        alert("此瀏覽器不支援語音辨識");
       }
     }
 
-    // 語音按鈕也可以啟動辨識
-    voiceBtn.addEventListener("click", () => {
-      playBeepAndStartRecognition();
-    });
+    voiceBtn.addEventListener("click", playBeepAndStartRecognition);
 
     window.onload = function () {
       initSpeechRecognition();
-      statusEl.textContent = "狀態：待命（Enter 或按 🎤 開始語音）";
+      updateUIStatus("SYSTEM READY", "ready");
+      updateCubeColor();
     };
   </script>
 </body>
